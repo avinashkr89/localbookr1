@@ -1,56 +1,58 @@
 // netlify/functions/getVendors.js
-import fetch from "node-fetch";
 
 export async function handler(event) {
+  const { AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME } = process.env;
+
+  if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !AIRTABLE_TABLE_NAME) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ ok: false, error: "Airtable credentials are not configured. Please contact the administrator." }),
+    };
+  }
+
   try {
     const q = event.queryStringParameters || {};
     const service = (q.service || "").toLowerCase();
     const area = (q.area || "").toLowerCase();
 
-    const AIRTABLE_BASE = process.env.AIRTABLE_BASE;
-    const AIRTABLE_KEY = process.env.AIRTABLE_KEY;
-    const tableName = "Vendors";
-
-    if (!AIRTABLE_BASE || !AIRTABLE_KEY) {
-      return { statusCode: 500, body: JSON.stringify({ ok:false, error: "Airtable environment variables not set." }) };
+    if (!service || !area) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ ok: false, error: "Service and area are required." }),
+      };
     }
+    
+    // Using LOWER() makes the filter case-insensitive
+    const filterByFormula = `AND(LOWER({service}) = "${service}", LOWER({area}) = "${area}")`;
+    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}?filterByFormula=${encodeURIComponent(filterByFormula)}`;
 
-    // Build Airtable URL (first page)
-    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/${encodeURIComponent(tableName)}?pageSize=100`;
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${AIRTABLE_KEY}` }
-    });
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      console.error("Airtable API Error:", data);
-      return { statusCode: resp.status, body: JSON.stringify({ ok: false, error: "Failed to fetch from Airtable.", details: data }) };
-    }
-
-    const records = data.records || [];
-
-    // Filter locally by service & area (case-insensitive contains)
-    const filtered = records.filter(r => {
-      const f = r.fields || {};
-      const svc = (f.Service || "").toString().toLowerCase();
-      const ar = (f.Area || "").toString().toLowerCase();
-      // Use includes for partial matching on area
-      return (!service || svc.includes(service)) && (!area || ar.includes(area));
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+      },
     });
 
-    const items = filtered.map(r => ({
-      id: r.id,
-      name: r.fields.Name || "",
-      service: r.fields.Service || "",
-      area: r.fields.Area || "",
-      phone: r.fields.Phone || "",
-      verified: !!r.fields.Verified,
-      rating: r.fields.Rating || 4.5,
-      rates: r.fields.Rates || "",
-      description: r.fields.Description || "",
-      photos: (r.fields.Photos || []).map(p => p.url)
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('Airtable API Error:', response.status, errorBody);
+      throw new Error('Failed to fetch data from Airtable.');
+    }
+
+    const data = await response.json();
+    
+    const items = data.records.map(record => ({
+      id: record.id,
+      name: record.fields.name || 'N/A',
+      service: record.fields.service || 'N/A',
+      area: record.fields.area || 'N/A',
+      phone: record.fields.phone || 'N/A',
+      verified: record.fields.verified || false,
+      rating: record.fields.rating || 0,
+      rates: record.fields.rates || 'N/A',
+      photos: record.fields.photos ? record.fields.photos.map(p => p.url) : ['https://placehold.co/100x100'],
+      description: record.fields.description || '',
     }));
-
+    
     // Sort: verified first then rating desc
     items.sort((a,b) => {
       if (a.verified === b.verified) return (b.rating||0)-(a.rating||0);
@@ -60,10 +62,11 @@ export async function handler(event) {
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ok: true, items })
+      body: JSON.stringify({ ok: true, items }),
     };
+
   } catch (err) {
     console.error("Function Error:", err);
-    return { statusCode: 500, body: JSON.stringify({ ok:false, error: err.message }) };
+    return { statusCode: 500, body: JSON.stringify({ ok: false, error: err.message }) };
   }
 }
