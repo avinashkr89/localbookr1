@@ -1,25 +1,25 @@
-import type { Vendor, BookingPayload, SearchParams } from '../types';
+import type { Vendor, BookingPayload, SearchParams, VendorApiResponse } from '../types';
 
-export const getVendors = async (params: SearchParams): Promise<Vendor[]> => {
+export const getVendors = async (params: SearchParams): Promise<VendorApiResponse> => {
   console.log('Fetching vendors from API for:', params);
   const q = `service=${encodeURIComponent(params.service || "")}&area=${encodeURIComponent(params.area || "")}`;
   
   try {
     const response = await fetch(`/.netlify/functions/getVendors?${q}`);
-    if (!response.ok) {
-        const errorBody = await response.text();
-        console.error('Failed to fetch vendors:', response.status, errorBody);
-        throw new Error('Failed to fetch vendors');
-    }
     const j = await response.json();
-    if (!j.ok) {
-        console.error('API Error:', j.error);
-        throw new Error(j.error || 'API returned an error');
+    
+    if (!response.ok) {
+        console.error('Failed to fetch vendors:', response.status, j.error);
+        throw new Error(j.error || 'Failed to fetch vendors. Please try again.');
     }
-    return j.items || [];
+    
+    return { items: j.items || [], usingMockData: !!j.usingMockData };
   } catch(err) {
     console.error("Network or parsing error:", err);
-    throw err;
+    if (err instanceof Error) {
+        throw err;
+    }
+    throw new Error("An unexpected error occurred.");
   }
 };
 
@@ -31,19 +31,19 @@ export const createBooking = async (payload: BookingPayload): Promise<{ ok: bool
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     });
-    if (!response.ok) {
-        const errorBody = await response.text();
-        console.error('Failed to create booking:', response.status, errorBody);
-        throw new Error('Failed to create booking');
-    }
     const result = await response.json();
-    if (!result.ok) {
-        console.error('API Error on booking:', result.error);
-        throw new Error(result.error || 'API returned an error during booking');
+    
+    if (!response.ok) {
+        console.error('Failed to create booking:', response.status, result.error);
+        throw new Error(result.error || 'Failed to create booking. Please try again.');
     }
+    
     return result;
   } catch(err) {
     console.error("Network or parsing error on booking:", err);
-    throw err;
+    if (err instanceof Error) {
+        throw err;
+    }
+    throw new Error("An unexpected error occurred during booking.");
   }
 };

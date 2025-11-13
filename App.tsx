@@ -14,6 +14,7 @@ const App: React.FC = () => {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [usingMockData, setUsingMockData] = useState<boolean>(false);
   const [bookingDetails, setBookingDetails] = useState({ 
     name: '', 
     phone: '', 
@@ -28,11 +29,16 @@ const App: React.FC = () => {
     if (!searchParams) return;
     setIsLoading(true);
     setError(null);
+    setUsingMockData(false);
     try {
       const result = await getVendors(searchParams);
-      setVendors(result);
+      setVendors(result.items);
+      if (result.usingMockData) {
+          setUsingMockData(true);
+      }
     } catch (err) {
-      setError('Failed to fetch vendors. Please try again.');
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -73,7 +79,8 @@ const App: React.FC = () => {
           await createBooking(payload);
           setCurrentPage(Page.Confirmation);
       } catch (err) {
-          setError('Booking failed. Please try again.');
+          const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+          setError(errorMessage);
       } finally {
           setIsLoading(false);
       }
@@ -83,6 +90,7 @@ const App: React.FC = () => {
     setSearchParams(null);
     setSelectedVendor(null);
     setVendors([]);
+    setUsingMockData(false);
     setBookingDetails({ name: '', phone: '', email: '', address: '', datetime: '', notes: '', payLater: true });
     setCurrentPage(Page.Home);
   };
@@ -111,6 +119,7 @@ const App: React.FC = () => {
             searchParams={searchParams}
             onViewDetails={handleViewDetails}
             onBack={goBack}
+            usingMockData={usingMockData}
           />
         );
        case Page.VendorDetails:
@@ -164,7 +173,7 @@ const HomePage: React.FC<{ onSearch: (service: string, area: string) => void }> 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if(area.trim()) {
-            onSearch(service, area);
+            onSearch(service, area.trim().toLowerCase());
         }
     }
 
@@ -224,7 +233,8 @@ const ResultsPage: React.FC<{
     searchParams: SearchParams | null;
     onViewDetails: (vendor: Vendor) => void;
     onBack: () => void;
-}> = ({ vendors, isLoading, error, searchParams, onViewDetails, onBack }) => {
+    usingMockData: boolean;
+}> = ({ vendors, isLoading, error, searchParams, onViewDetails, onBack, usingMockData }) => {
     return (
         <div>
             <PageHeader
@@ -232,6 +242,12 @@ const ResultsPage: React.FC<{
               title={<>Results for <span className="capitalize">{searchParams?.service}</span></>}
             />
             
+            {usingMockData && (
+                <div className="mb-4 text-center text-sm text-orange-800 bg-orange-100 p-3 rounded-lg" role="alert">
+                    <strong>Demo Mode:</strong> You are viewing sample data. To use your own vendors, please configure your Airtable credentials.
+                </div>
+            )}
+
             {isLoading && <Spinner />}
             {error && <p className="text-center text-red-500 bg-red-100 p-4 rounded-lg">{error}</p>}
             

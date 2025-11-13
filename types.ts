@@ -36,3 +36,8 @@ export type SearchParams = {
   service: string;
   area: string;
 }
+
+export interface VendorApiResponse {
+  items: Vendor[];
+  usingMockData?: boolean;
+}
