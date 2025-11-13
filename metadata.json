@@ -1,0 +1,5 @@
+{
+  "name": "LocalBookr",
+  "description": "LocalBookr helps users quickly find local service providers (plumbers, tailors, electricians, carpenters, AC repair, etc.) in their area, view their details, and book them instantly.",
+  "requestFramePermissions": []
+}
